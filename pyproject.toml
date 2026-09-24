@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "logitly"
+version = "0.1.0"
+description = "Closed questions for LLMs, answered from the logits and calibrated."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Maxim Perekhodkin" }]
+keywords = ["llm", "classification", "calibration", "transformers", "logits"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+]
+
+# Runtime feature, so an extra: pip install "logitly[hf]"
+[project.optional-dependencies]
+hf = ["torch>=2.0", "transformers>=4.40"]
+
+# Tooling, so groups: not published, installed with `uv sync --group dev --group bench`
+# (or `pip install --group dev` on pip 25.1+).
+[dependency-groups]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+bench = ["datasets>=2.18", "matplotlib>=3.8", "pyyaml>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/mxm0312/logitly"
+Source = "https://github.com/mxm0312/logitly"
+Issues = "https://github.com/mxm0312/logitly/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/logitly"]
+
+# The library and its tests; benchmark results are megabytes of figures nobody
+# needs in order to build or test it.
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/LICENSE", "/pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "benchmark"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["logitly", "logitbench"]

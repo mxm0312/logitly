@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Saved questions and calibrations produced by the examples
+sentiment.json
+
+# Benchmark: a real run's numbers, figures and score caches are committed (1.5 MB)
+# so `make report` works on a fresh clone; the smoke run is throwaway.
+benchmark/results-smoke/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

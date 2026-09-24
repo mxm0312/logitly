@@ -1,0 +1,26 @@
+# A minute-long dry run: same pipeline, a deterministic stand-in instead of a model.
+# Use it to check a config, the data fields and the report before booking a GPU.
+#
+#   uv run --group bench benchmark/run.py --config benchmark/smoke.yml
+
+output_dir: results-smoke
+
+experiment:
+  test_size: 200
+  calib_pool: 128
+  calib_sizes: [8, 32, 128]
+  seeds: [0, 1, 2]
+  n_bins: 15
+
+models:
+  fake:
+    kind: fake
+    backend: { temperature: 0.4, bias: [1.0, -1.0] }   # overconfident and skewed on purpose
+
+datasets:
+  sst2:
+    path: stanfordnlp/sst2
+    text_field: sentence
+    test_split: validation
+    options: [negative, positive]
+    instructions: Is this movie review positive or negative?
