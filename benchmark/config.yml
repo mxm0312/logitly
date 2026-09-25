@@ -10,7 +10,7 @@ output_dir: results
 experiment:
   test_size: 1000        # examples the metrics are measured on (per dataset override below)
   calib_pool: 512        # scored once per model; every calibration set is drawn from it
-  calib_sizes: [8, 16, 32, 64, 256]
+  calib_sizes: [8, 16, 32, 64, 128, 256]
   seeds: [0, 1, 2, 3, 4] # each one redraws the calibration set; tables report mean ± std
   data_seed: 0           # fixes the test set and the pool, so models see identical data
   balanced_calibration: false  # true = equal examples per class instead of the natural mix
@@ -31,26 +31,24 @@ models:
     model: Qwen/Qwen3.5-2B       # non-thinking by default, so the answer comes first
     load: { batch_size: 16 }
 
-  # vllm:
-  #   kind: api
-  #   model: Qwen/Qwen2.5-7B-Instruct
-  #   base_url: http://localhost:8000/v1
-  #   api_key_env: VLLM_API_KEY
-  #   api: { concurrency: 16, top_logprobs: 20 }
+  qwen3-vl-8b-vllm:
+    kind: api
+    model: Qwen/Qwen3-VL-8B-Instruct
+    base_url: http://localhost:8000/v1   # any OpenAI-compatible server
+    api: { top_logprobs: 20, concurrency: 16 }
+    extra_body: { chat_template_kwargs: { enable_thinking: false } }
+
+  qwen3.5-122b-vllm:
+    kind: api
+    model: Qwen/Qwen3.5-122B-A10B-GPTQ-Int4
+    base_url: http://localhost:8001/v1
+    api: { top_logprobs: 20, concurrency: 16 }
+    extra_body: { chat_template_kwargs: { enable_thinking: false } }
 
 # -------------------------------------------------------------- datasets ----
 # `options` is indexed by the dataset's own label id, so order is not cosmetic.
 
 datasets:
-  sst2:
-    path: stanfordnlp/sst2
-    text_field: sentence
-    test_split: validation      # the real test split is unlabelled
-    test_size: 800              # that split holds 872 examples
-    options: [negative, positive]
-    instructions: Is this movie review positive or negative?
-    context: You label movie reviews by sentiment.
-
   ag_news:
     path: fancyzhx/ag_news
     options: [world, sports, business, science and technology]
@@ -72,6 +70,33 @@ datasets:
     options: [sadness, joy, love, anger, fear, surprise]
     instructions: Which emotion does this message express?
     context: You label short social-media messages by emotion.
+
+  tweet_eval:
+    path: cardiffnlp/tweet_eval
+    config: sentiment
+    options: [negative, neutral, positive]
+    instructions: Is the sentiment of this tweet negative, neutral or positive?
+    context: You label tweets by sentiment.
+
+  dbpedia:                      # 14 options: on an API model every label has to make the top 20
+    path: fancyzhx/dbpedia_14
+    text_field: content         # the article's opening; the title is a separate field
+    options: [company, educational institution, artist, athlete, office holder,
+              means of transportation, building, natural place, village, animal,
+              plant, album, film, written work]
+    instructions: What kind of thing does this Wikipedia article describe?
+    context: You classify Wikipedia articles by the kind of entity they are about.
+
+  yahoo:
+    path: community-datasets/yahoo_answers_topics
+    text_field: question_title  # just the question: short, and often ambiguous between topics
+    label_field: topic
+    calib_split: test           # the pool takes test rows the test set left; skips the 1.4M-row train download
+    options: [society and culture, science and mathematics, health, education and reference,
+              computers and internet, sports, business and finance, entertainment and music,
+              family and relationships, politics and government]
+    instructions: Which topic does this question belong to?
+    context: You sort questions from a Q&A site into topics.
 
 # ---------------------------------------------------------------- report ----
 

@@ -4,7 +4,7 @@
 #
 # From the repository root, prefix everything with -C benchmark:
 #
-#   make -C benchmark dataset-sst2
+#   make -C benchmark dataset-ag_news
 #
 # CONFIG, MODELS and DATASETS override what a target runs; keys are the ones in
 # config.yml, so nothing here needs updating when you add a model or a dataset.
@@ -16,10 +16,11 @@ DATASETS ?=
 
 PY   = $(UV) run --group bench python
 RUN  = $(UV) run --group bench run.py --config $(CONFIG)
+ANALYZE = $(UV) run --group bench analyze.py --config $(CONFIG)
 ONLY = $(if $(MODELS),--models $(MODELS)) $(if $(DATASETS),--datasets $(DATASETS))
 
 .DEFAULT_GOAL := help
-.PHONY: help setup list all smoke report clean FORCE
+.PHONY: help setup list all smoke report analysis clean FORCE
 
 help:  ## show this
 	@grep -E '^[a-zA-Z_%-]+:.*## ' $(MAKEFILE_LIST) \
@@ -37,11 +38,12 @@ list:  ## print the model and dataset keys this config defines
 
 all:  ## the full sweep, or a slice of it via MODELS= / DATASETS=
 	$(RUN) $(ONLY)
+	$(ANALYZE)
 
-dataset-%: FORCE  ## one dataset, every model, e.g. make dataset-sst2
+dataset-%: FORCE  ## one dataset, every model, e.g. make dataset-ag_news
 	$(RUN) --datasets $* $(if $(MODELS),--models $(MODELS))
 
-model-%: FORCE  ## one model, every dataset, e.g. make model-qwen2.5-7b-instruct
+model-%: FORCE  ## one model, every dataset, e.g. make model-qwen3.5-2b
 	$(RUN) --models $* $(if $(DATASETS),--datasets $(DATASETS))
 
 smoke:  ## dry run on a stand-in model: no weights, checks the whole pipeline
@@ -49,6 +51,10 @@ smoke:  ## dry run on a stand-in model: no weights, checks the whole pipeline
 
 report:  ## rebuild tables and plots from an existing run, no model loaded
 	$(UV) run --group bench report.py --config $(CONFIG)
+	$(ANALYZE)
+
+analysis:  ## only the cross-model figures and tables in results/analysis/
+	$(ANALYZE)
 
 clean:  ## delete this config's output directory, cached scores included
 	@dir=$$($(PY) -c "import pathlib, yaml; \

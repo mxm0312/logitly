@@ -1,18 +1,16 @@
 # logitly
 
-Just like Jev, you ask an LLM to answer a question by picking one of the available options (A, B, C). but along with the chosen option, you get a real probability you can actually trust
+Just like Jev: you ask an LLM to answer a question by picking one of the available options (A, B, C), and along with the chosen option you get a probability you can actually trust.
 
 ![how it works](assets/how-it-works.png)
 
-it's no secret that a probability an LLM makes up is a scam. and so is the probability you get from the logit of the matching option (the naive way to recreate Jev)
+A probability an LLM writes out as text is just more generated text: nothing ties it to how often the model is right. The softmax over the option logits (the naive way to recreate Jev) is a real signal, but it is overconfident
 
-this tool uses calibration to make naive open-source Jev spit out probabilities that actually match reality
-
-
+logitly calibrates these probabilities on a few dozen labelled examples, so that they match how often the model is actually right.
 
 ## Install
 
-Python 3.10 or newer. The base install is small: numpy, pydantic and httpx
+Python 3.10 or newer. The base install is small: numpy, pydantic and httpx.
 
 ```bash
 pip install git+https://github.com/mxm0312/logitly.git
@@ -24,9 +22,9 @@ To run local weights, add the `hf` extra, which brings torch and transformers:
 pip install "logitly[hf] @ git+https://github.com/mxm0312/logitly.git"
 ```
 
-If you care which torch build you get: CPU-only, or a particular CUDA
+If you care which torch build you get (CPU-only, or a particular CUDA version),
 install it first from [pytorch.org](https://pytorch.org/get-started/locally/) and
-then the line above
+then run the line above.
 
 ## Example
 
@@ -72,84 +70,37 @@ tokenizer, no weights: options are matched by the text of the returned tokens.
 llm = Logitly.from_api("Qwen/Qwen2.5-7B-Instruct", "http://my-host:8000/v1")
 ```
 
-## Benchmarks
+## Benchmark
 
-Below you can see the results on 4 datasets:
-- [sst2](https://huggingface.co/datasets/stanfordnlp/sst2) — movie-review sentiment, 2 classes
-- [ag_news](https://huggingface.co/datasets/fancyzhx/ag_news) — newspaper section, 4 classes
-- [trec](https://huggingface.co/datasets/CogComp/trec) — what a question asks for, 6 classes
-- [emotion](https://huggingface.co/datasets/dair-ai/emotion) — emotion in a short message, 6 classes
+Datasets:
+- [ag_news](https://huggingface.co/datasets/fancyzhx/ag_news) (4 classes)
+- [trec](https://huggingface.co/datasets/CogComp/trec) (6 classes)
+- [emotion](https://huggingface.co/datasets/dair-ai/emotion) (6 classes)
+- [tweet_eval](https://huggingface.co/datasets/cardiffnlp/tweet_eval) (3 classes)
+- [dbpedia](https://huggingface.co/datasets/fancyzhx/dbpedia_14) (14 classes)
+- [yahoo](https://huggingface.co/datasets/community-datasets/yahoo_answers_topics) (10 classes)
 
-measured with [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B).
+| model | calibration error (ECE) | log-loss (NLL) |
+|---|---|---|
+| [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) | 0.152 → **0.045** (−70%) | −29% |
+| [Qwen3-VL-8B](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct) | 0.219 → **0.037** (−83%) | −80% |
+| [Qwen3.5-122B-A10B](https://huggingface.co/Qwen/Qwen3.5-122B-A10B) | 0.141 → **0.035** (−75%) | −28% |
 
-![calibration benchmark](benchmark/results/summary.png)
+A more detailed overview is in [benchmark/README.md](benchmark/README.md).
 
-Qwen3.5-2B on four classification sets, calibration fitted on 8 to 256 labelled
-examples, five seeds each, measured on a held-out split of 500 to 1000 examples
-the fit never sees.
+![reliability diagrams](benchmark/results/analysis/reliability.png)
 
-| dataset | model | accuracy | NLL | ECE | Brier | changed |
-|---|---|---|---|---|---|---|
-| sst2 | qwen3.5-2b | 0.881 → 0.906 (+0.025) ✓ | 0.269 → 0.252 (-0.017) ✓ | 0.028 → 0.026 (-0.002) ✓ | 0.159 → 0.143 (-0.016) ✓ | 7.7% |
-| ag_news | qwen3.5-2b | 0.835 → 0.864 (+0.029) ✓ | 0.607 → 0.405 (-0.202) ✓ | 0.089 → 0.022 (-0.067) ✓ | 0.260 → 0.207 (-0.053) ✓ | 8.7% |
-| trec | qwen3.5-2b | 0.766 → 0.802 (+0.036) ✓ | 0.779 → 0.657 (-0.123) ✓ | 0.067 → 0.057 (-0.011) ✓ | 0.360 → 0.298 (-0.062) ✓ | 16.1% |
-| emotion | qwen3.5-2b | 0.562 → 0.566 (+0.004) ✓ | 1.516 → 1.190 (-0.326) ✓ | 0.218 → 0.048 (-0.170) ✓ | 0.656 → 0.570 (-0.086) ✓ | 11.4% |
+**Calibration error drops by 70–83% on every model.**
 
-Calibration buys a large drop in NLL, ECE and Brier, and a smaller but real gain
-in accuracy. Those accuracy points come from the per-option bias, not the
-temperature: `T` is monotone per option and cannot change which option wins.
+![calibration error before and after](benchmark/results/analysis/simple_ece.png)
 
-<details>
-<summary>Every calibration size, mean ± std over five seeds</summary>
+**Use at least 32 calibration examples.**
 
-**sst2** — Is this movie review positive or negative? `stanfordnlp/sst2`
+On our datasets, 32 examples already cut the calibration error by 69%. With 8–16 examples, calibration can occasionally make things worse :)
 
-| calibration | accuracy | NLL | ECE | Brier | mean confidence | predictions changed |
-|---|---|---|---|---|---|---|
-| raw | 0.881 | 0.269 | 0.028 | 0.159 | 0.886 | 0.0% |
-| calibrated n=8 | 0.894 ± 0.013 | 0.345 ± 0.095 | 0.060 ± 0.024 | 0.167 ± 0.028 | 0.947 ± 0.012 | 3.2% ± 1.5% |
-| calibrated n=16 | 0.903 ± 0.004 | 0.315 ± 0.039 | 0.070 ± 0.045 | 0.159 ± 0.017 | 0.909 ± 0.083 | 7.5% ± 3.1% |
-| calibrated n=32 | 0.900 ± 0.011 | 0.301 ± 0.069 | 0.062 ± 0.041 | 0.159 ± 0.021 | 0.904 ± 0.071 | 6.0% ± 4.0% |
-| calibrated n=64 | 0.906 ± 0.002 | 0.268 ± 0.048 | 0.031 ± 0.013 | 0.147 ± 0.004 | 0.913 ± 0.026 | 8.7% ± 2.1% |
-| calibrated n=256 | 0.906 ± 0.001 | 0.252 ± 0.014 | 0.026 ± 0.008 | 0.143 ± 0.001 | 0.916 ± 0.017 | 7.7% ± 0.5% |
+![how many labelled examples](benchmark/results/analysis/simple_data.png)
 
-**ag_news** — Which section of the newspaper does this story belong to? `fancyzhx/ag_news`
-
-| calibration | accuracy | NLL | ECE | Brier | mean confidence | predictions changed |
-|---|---|---|---|---|---|---|
-| raw | 0.835 | 0.607 | 0.089 | 0.260 | 0.922 | 0.0% |
-| calibrated n=8 | 0.854 ± 0.003 | 0.508 ± 0.050 | 0.069 ± 0.014 | 0.233 ± 0.005 | 0.844 ± 0.077 | 3.0% ± 1.0% |
-| calibrated n=16 | 0.859 ± 0.005 | 0.532 ± 0.136 | 0.053 ± 0.030 | 0.227 ± 0.009 | 0.900 ± 0.042 | 4.7% ± 1.0% |
-| calibrated n=32 | 0.858 ± 0.006 | 0.450 ± 0.021 | 0.034 ± 0.013 | 0.223 ± 0.009 | 0.846 ± 0.032 | 5.4% ± 2.1% |
-| calibrated n=64 | 0.865 ± 0.002 | 0.423 ± 0.006 | 0.030 ± 0.014 | 0.212 ± 0.002 | 0.876 ± 0.023 | 7.7% ± 1.6% |
-| calibrated n=256 | 0.864 ± 0.002 | 0.405 ± 0.004 | 0.022 ± 0.005 | 0.207 ± 0.001 | 0.870 ± 0.004 | 8.7% ± 0.6% |
-
-**trec** — What kind of answer does this question ask for? `CogComp/trec`
-
-| calibration | accuracy | NLL | ECE | Brier | mean confidence | predictions changed |
-|---|---|---|---|---|---|---|
-| raw | 0.766 | 0.779 | 0.067 | 0.360 | 0.754 | 0.0% |
-| calibrated n=8 | 0.802 ± 0.010 | 0.770 ± 0.102 | 0.065 ± 0.023 | 0.314 ± 0.003 | 0.820 ± 0.057 | 9.6% ± 1.5% |
-| calibrated n=16 | 0.806 ± 0.008 | 0.669 ± 0.038 | 0.074 ± 0.041 | 0.305 ± 0.015 | 0.749 ± 0.047 | 12.2% ± 3.8% |
-| calibrated n=32 | 0.797 ± 0.010 | 0.692 ± 0.050 | 0.071 ± 0.036 | 0.310 ± 0.011 | 0.750 ± 0.051 | 14.1% ± 2.4% |
-| calibrated n=64 | 0.804 ± 0.007 | 0.677 ± 0.049 | 0.072 ± 0.037 | 0.305 ± 0.018 | 0.744 ± 0.051 | 14.6% ± 1.6% |
-| calibrated n=256 | 0.802 ± 0.004 | 0.657 ± 0.018 | 0.057 ± 0.008 | 0.298 ± 0.005 | 0.761 ± 0.010 | 16.1% ± 0.8% |
-
-**emotion** — Which emotion does this message express? `dair-ai/emotion`
-
-| calibration | accuracy | NLL | ECE | Brier | mean confidence | predictions changed |
-|---|---|---|---|---|---|---|
-| raw | 0.562 | 1.516 | 0.218 | 0.656 | 0.773 | 0.0% |
-| calibrated n=8 | 0.555 ± 0.006 | 1.324 ± 0.147 | 0.121 ± 0.081 | 0.613 ± 0.038 | 0.655 ± 0.094 | 6.3% ± 2.3% |
-| calibrated n=16 | 0.564 ± 0.002 | 1.231 ± 0.015 | 0.068 ± 0.017 | 0.585 ± 0.006 | 0.585 ± 0.054 | 4.0% ± 2.0% |
-| calibrated n=32 | 0.560 ± 0.010 | 1.222 ± 0.014 | 0.074 ± 0.024 | 0.585 ± 0.008 | 0.623 ± 0.033 | 8.6% ± 3.2% |
-| calibrated n=64 | 0.558 ± 0.007 | 1.241 ± 0.052 | 0.093 ± 0.036 | 0.590 ± 0.018 | 0.643 ± 0.035 | 8.8% ± 1.9% |
-| calibrated n=256 | 0.566 ± 0.004 | 1.190 ± 0.004 | 0.048 ± 0.012 | 0.570 ± 0.002 | 0.608 ± 0.012 | 11.4% ± 1.1% |
-
-</details>
-
-Run it yourself, or point it at your own models and datasets through
-`benchmark/config.yml`:
+To reproduce:
 
 ```bash
 cd benchmark && make setup && make all     # make on its own lists every target

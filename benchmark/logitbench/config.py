@@ -37,11 +37,20 @@ class ApiModel(Frozen):
     )
     prompt: PromptConfig = PromptConfig()
     api: ApiConfig = ApiConfig()
+    extra_body: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra request fields, e.g. chat_template_kwargs to turn thinking off.",
+    )
 
     def build(self) -> Logitly:
         key = os.environ[self.api_key_env] if self.api_key_env else None
         return Logitly.from_api(
-            self.model, self.base_url, api_key=key, config=self.api, prompt=self.prompt
+            self.model,
+            self.base_url,
+            api_key=key,
+            config=self.api,
+            prompt=self.prompt,
+            extra_body=self.extra_body,
         )
 
 
